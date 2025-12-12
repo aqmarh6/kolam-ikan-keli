@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌊 Aquarium Sensor Dashboard — KV Chenor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body {
+    font-family: 'Segoe UI', sans-serif;
+    margin: 0; padding: 20px;
+    background: linear-gradient(to bottom, #00c3ff, #005f73);
+    color: #fff;
+    overflow-x: hidden;
+}
+header { text-align:center; margin-bottom:40px; text-shadow:2px2px5px rgba(0,0,0,0.3); }
+.metrics { display:flex; flex-wrap:wrap; justify-content:center; gap:20px; margin-bottom:40px; }
+.card {
+    background:rgba(255,255,255,0.1); backdrop-filter:blur(8px); border-radius:20px;
+    padding:25px; min-width:180px; text-align:center; font-weight:bold;
+    box-shadow:0 8px 20px rgba(0,0,0,0.4);
+    position:relative; transition: transform 0.3s, box-shadow 0.3s;
+}
+.card:hover { transform:translateY(-5px); box-shadow:0 15px 25px rgba(0,0,0,0.6); }
+.card::after { content:"🐠"; position:absolute; bottom:10px; right:15px; font-size:2rem; opacity:0.4; }
+.charts { display:flex; flex-wrap:wrap; gap:20px; justify-content:center; margin-bottom:40px; }
+
+canvas {
+    background:rgba(255,255,255,0.15); padding:20px; border-radius:20px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.3); max-width:600px;
+}
+
+.data-section { max-width:1000px; margin:0 auto 40px; }
+.table-container {
+    overflow-x:auto; border-radius:15px; background:rgba(255,255,255,0.1);
+    backdrop-filter:blur(6px); padding:10px;
+}
+table { width:100%; border-collapse:collapse; }
+th, td { padding:12px; text-align:center; color:#fff; }
+thead { background:rgba(0,0,0,0.3); font-weight:bold; }
+tbody tr:nth-child(even) { background: rgba(255,255,255,0.05); }
+tbody tr:hover { background: rgba(255,255,255,0.2); transform:scale(1.02); transition:0.2s; }
+
+footer { text-align:center; font-style:italic; margin-top:30px; }
+
+/* Looker Studio Section */
+.looker-section {
+    max-width:1000px;
+    margin:40px auto;
+    background:rgba(255,255,255,0.15);
+    padding:20px;
+    border-radius:20px;
+    box-shadow:0 8px 20px rgba(0,0,0,0.3);
+}
+.looker-section h2 {
+    text-align:center;
+    margin-bottom:20px;
+    text-shadow:2px2px5px rgba(0,0,0,0.3);
+}
+.looker-frame {
+    width:100%;
+    height:480px;
+    border:0;
+    border-radius:15px;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+<h1>🌊 Aquarium Sensor Dashboard — KV Chenor</h1>
+<p>Realtime monitoring: Suhu, pH, Turbidity</p>
+</header>
+
+<section class="metrics">
+<div class="card" id="time">Masa: --</div>
+<div class="card" id="temperature">Suhu (°C): --</div>
+<div class="card" id="ph">pH: --</div>
+<div class="card" id="turbidity">Turbidity (NTU): --</div>
+</section>
+
+<section class="charts">
+<canvas id="tempPhChart"></canvas>
+<canvas id="turbidityChart"></canvas>
+</section>
+
+<section class="data-section">
+<h2>Data Terbaru</h2>
+<div class="table-container">
+<table id="dataTable">
+<thead>
+<tr><th>Masa</th><th>Suhu</th><th>pH</th><th>Turbidity</th></tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+</section>
+
+<!-- ⭐ Looker Studio Chart Section ⭐ -->
+<section class="looker-section">
+<h2>📊 Analitik Lanjutan (Google Looker Studio)</h2>
+<iframe class="looker-frame"
+    src="https://lookerstudio.google.com/embed/reporting/c2699740-fa59-42f4-9783-64ae239c5d85/page/page_12345"
+    frameborder="0"
+    allowfullscreen
+    sandbox="allow-storage-access-by-user-activation allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox">
+</iframe>
+</section>
+
+<footer>
+<p>Built with ❤️ — KV Chenor Aquarium Theme</p>
+</footer>
+
+<script>
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJTL7VoNImWlRGUxMWGptwHGYPkKQpaJ4FaC45EkK_pk77yUinUhMtspY-tn4rCW6OJm9vYlV-VYHS/pub?output=csv";
+
+async function fetchSheetCSV(){
+    const res = await fetch(SHEET_CSV_URL);
+    const text = await res.text();
+    const rows = text.trim().split("\n");
+    rows.shift();
+
+    return rows.map(r=>{
+        const cols = r.split(",");
+        return {
+            timestamp: cols[0],
+            temperature: parseFloat(cols[1]),
+            ph: parseFloat(cols[2]),
+            turbidity: parseFloat(cols[3])
+        };
+    });
+}
+
+function updateDashboard(data){
+    const latest = data[data.length-1];
+    document.getElementById("time").innerText = "Masa: " + latest.timestamp;
+    document.getElementById("temperature").innerText = "Suhu (°C): " + latest.temperature.toFixed(1);
+    document.getElementById("ph").innerText = "pH: " + latest.ph.toFixed(2);
+    document.getElementById("turbidity").innerText = "Turbidity (NTU): " + latest.turbidity.toFixed(2);
+
+    const tbody = document.querySelector("#dataTable tbody");
+    tbody.innerHTML = "";
+    data.slice().reverse().forEach(row=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.timestamp}</td><td>${row.temperature}</td><td>${row.ph}</td><td>${row.turbidity}</td>`;
+        tbody.appendChild(tr);
+    });
+
+    const labels = data.map(d=>d.timestamp);
+
+    const tempPhData = {
+        labels: labels,
+        datasets: [
+            { label:"Suhu (°C)", data:data.map(d=>d.temperature), borderColor:"rgba(255,99,132,1)", backgroundColor:"rgba(255,99,132,0.2)", fill:true, tension:0.4 },
+            { label:"pH", data:data.map(d=>d.ph), borderColor:"rgba(54,162,235,1)", backgroundColor:"rgba(54,162,235,0.2)", fill:true, tension:0.4 }
+        ]
+    };
+
+    const turbData = {
+        labels: labels,
+        datasets: [
+            { label:"Turbidity (NTU)", data:data.map(d=>d.turbidity), borderColor:"rgba(75,192,192,1)", backgroundColor:"rgba(75,192,192,0.2)", fill:true, tension:0.4 }
+        ]
+    };
+
+    if(window.tempPhChart) window.tempPhChart.destroy();
+    if(window.turbChart) window.turbChart.destroy();
+
+    const ctx1 = document.getElementById("tempPhChart").getContext("2d");
+    window.tempPhChart = new Chart(ctx1, { type:"line", data:tempPhData, options:{ responsive:true } });
+
+    const ctx2 = document.getElementById("turbidityChart").getContext("2d");
+    window.turbChart = new Chart(ctx2, { type:"line", data:turbData, options:{ responsive:true } });
+}
+
+async function loadDashboard(){
+    const data = await fetchSheetCSV();
+    updateDashboard(data);
+    setInterval(async()=>{
+        const newData = await fetchSheetCSV();
+        updateDashboard(newData);
+    },10000);
+}
+
+loadDashboard();
+</script>
+
+</body>
+</html>
